@@ -17,7 +17,7 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 #tf.debugging.set_log_device_placement(True)
 
-# output image size after pre-processing
+# Parameters
 img_width, img_height = 32, 32
 batch_size = 64
 epochs = 1
@@ -25,8 +25,10 @@ input_shape = (32, 32, 3)
 train_directory = './train'
 test_directory = './test'
 
+# Load the data
 data = pd.read_csv('train_labels.csv', dtype=str)
 
+# Assuming the correct columns are 'id' and 'label'
 data['id'] = data['id'] + '.tif'  # Add file extension
 (data['label'].value_counts() / len(data)).to_frame().sort_index().T
 
