@@ -17,7 +17,7 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 #tf.debugging.set_log_device_placement(True)
 
-# Parameters
+# output image size after pre-processing
 img_width, img_height = 32, 32
 batch_size = 64
 epochs = 1
@@ -25,33 +25,23 @@ input_shape = (32, 32, 3)
 train_directory = './train'
 test_directory = './test'
 
-# Load the data
 data = pd.read_csv('train_labels.csv', dtype=str)
 
-# Assuming the correct columns are 'id' and 'label'
 data['id'] = data['id'] + '.tif'  # Add file extension
-(data['label'].value_counts() / len(data)).to_frame().sort_index().T
 
 filenames = data['id'].values
 labels = data['label'].values
 
 # Split the data into training and validation sets
-train_filenames, val_filenames, train_labels, val_labels = train_test_split(filenames, labels, test_size=0.2, random_state=42)
-
-# Create data augmentation generators
-train_datagen = ImageDataGenerator(rescale=1/255)
-
-validation_datagen = ImageDataGenerator(rescale=1/255)
+train_filenames, val_filenames, train_labels, val_labels = train_test_split(filenames, labels, test_size=0.2, random_state=75)
 
 # Create training and validation datasets
 train_df = pd.DataFrame({'id': train_filenames, 'label': train_labels})
 val_df = pd.DataFrame({'id': val_filenames, 'label': val_labels})
 
-print("Train DataFrame head:")
-print(train_df.head())
-
-print("Validation DataFrame head:")
-print(val_df.head())
+# Create image data generators (augment data) augmentation generators
+train_datagen = ImageDataGenerator(rescale=1/255)
+validation_datagen = ImageDataGenerator(rescale=1/255)
 
 train_ds = train_datagen.flow_from_dataframe(
     dataframe=train_df,

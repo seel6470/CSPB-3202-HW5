@@ -28,30 +28,22 @@ test_directory = './test'
 data = pd.read_csv('train_labels.csv', dtype=str)
 
 data['id'] = data['id'] + '.tif'  # Add file extension
-(data['label'].value_counts() / len(data)).to_frame().sort_index().T
 
 filenames = data['id'].values
 labels = data['label'].values
 
 # Split the data into training and validation sets
-train_filenames, val_filenames, train_labels, val_labels = train_test_split(filenames, labels, test_size=0.2, random_state=42)
-
-# Create data augmentation generators
-train_datagen = ImageDataGenerator(rescale=1/255)
-
-validation_datagen = ImageDataGenerator(rescale=1/255)
+train_filenames, val_filenames, train_labels, val_labels = train_test_split(filenames, labels, test_size=0.2, random_state=75)
 
 # Create training and validation datasets
 train_df = pd.DataFrame({'id': train_filenames, 'label': train_labels})
 val_df = pd.DataFrame({'id': val_filenames, 'label': val_labels})
 
-print("Train DataFrame head:")
-print(train_df.head())
+# create image data generators, normalizing RGB values
+train_generator = ImageDataGenerator(rescale=1/255)
+validation_generator = ImageDataGenerator(rescale=1/255)
 
-print("Validation DataFrame head:")
-print(val_df.head())
-
-train_ds = train_datagen.flow_from_dataframe(
+train_dataset = train_generator.flow_from_dataframe(
     dataframe=train_df,
     directory=train_directory,
     x_col='id',
@@ -63,7 +55,7 @@ train_ds = train_datagen.flow_from_dataframe(
     target_size=(32, 32)
 )
 
-val_ds = validation_datagen.flow_from_dataframe(
+val_dataset = validation_generator.flow_from_dataframe(
     dataframe=val_df,
     directory=train_directory,
     x_col='id',
@@ -115,7 +107,7 @@ opt = tf.keras.optimizers.Adam(0.001)
 cnn.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy', tf.keras.metrics.AUC()])
 
 # Train the model
-h1 = cnn.fit(
+fit1 = cnn.fit(
     x = train_ds, 
     steps_per_epoch = len(train_ds),
     epochs = 40,
@@ -123,16 +115,16 @@ h1 = cnn.fit(
     validation_steps = len(val_ds), 
     verbose = 1
 )
-history = h1.history
-h2 = cnn.fit(
-    x = train_ds, 
+history = fit1.history
+fit2 = cnn.fit(
+    x = train_dataset, 
     steps_per_epoch = len(train_ds), 
     epochs = 30,
     validation_data = val_ds, 
     validation_steps = len(val_ds), 
     verbose = 1
 )
-h3 = cnn.fit(
+fit3 = cnn.fit(
     x = train_ds, 
     steps_per_epoch = len(train_ds), 
     epochs = 20,
