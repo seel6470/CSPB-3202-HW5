@@ -39,11 +39,11 @@ train_filenames, val_filenames, train_labels, val_labels = train_test_split(file
 train_df = pd.DataFrame({'id': train_filenames, 'label': train_labels})
 val_df = pd.DataFrame({'id': val_filenames, 'label': val_labels})
 
-# Create image data generators (augment data) augmentation generators
-train_datagen = ImageDataGenerator(rescale=1/255)
-validation_datagen = ImageDataGenerator(rescale=1/255)
+# create image data generators, normalizing RGB values
+train_generator = ImageDataGenerator(rescale=1/255)
+validation_generator = ImageDataGenerator(rescale=1/255)
 
-train_ds = train_datagen.flow_from_dataframe(
+train_dataset = train_generator.flow_from_dataframe(
     dataframe=train_df,
     directory=train_directory,
     x_col='id',
@@ -55,7 +55,7 @@ train_ds = train_datagen.flow_from_dataframe(
     target_size=(32, 32)
 )
 
-val_ds = validation_datagen.flow_from_dataframe(
+val_dataset = validation_generator.flow_from_dataframe(
     dataframe=val_df,
     directory=train_directory,
     x_col='id',
@@ -67,26 +67,25 @@ val_ds = validation_datagen.flow_from_dataframe(
     target_size=(32, 32)
 )
 
-# Check the contents of the datasets
-print("Number of batches in train_ds:", len(train_ds))
-print("Number of batches in val_ds:", len(val_ds))
-
 # Load pre-trained EfficientNetB0 model + higher level layers
 base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=input_shape)
 
 cnn = Sequential([
+    # 16 filters capture low level features (e.g. edges)
     Conv2D(16, (3,3), activation = 'relu', padding = 'same', input_shape=(32,32,3)),
     Conv2D(16, (3,3), activation = 'relu', padding = 'same'),
     MaxPooling2D(2,2),
     Dropout(0.5),
     BatchNormalization(),
 
+    # 64 filters capture more complex features (general shapes)
     Conv2D(64, (3,3), activation = 'relu', padding = 'same'),
     Conv2D(64, (3,3), activation = 'relu', padding = 'same'),
     MaxPooling2D(2,2),
     Dropout(0.5),
     BatchNormalization(),
     
+    # 128 filters capture high-level abstract features
     Conv2D(128, (3,3), activation = 'relu', padding = 'same'),
     Conv2D(128, (3,3), activation = 'relu', padding = 'same'),
     MaxPooling2D(2,2),
@@ -95,6 +94,7 @@ cnn = Sequential([
 
     Flatten(),
     
+    # final fully connected layers
     Dense(16, activation='relu'),
     Dropout(0.5),
     Dense(8, activation='relu'),
@@ -107,34 +107,16 @@ opt = tf.keras.optimizers.Adam(0.001)
 cnn.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy', tf.keras.metrics.AUC()])
 
 # Train the model
-h1 = cnn.fit(
-    x = train_ds, 
-    steps_per_epoch = len(train_ds),
-    epochs = 40,
-    validation_data = val_ds, 
-    validation_steps = len(val_ds), 
-    verbose = 1
-)
-history = h1.history
-h2 = cnn.fit(
-    x = train_ds, 
-    steps_per_epoch = len(train_ds), 
-    epochs = 30,
-    validation_data = val_ds, 
-    validation_steps = len(val_ds), 
-    verbose = 1
-)
-h3 = cnn.fit(
-    x = train_ds, 
-    steps_per_epoch = len(train_ds), 
-    epochs = 20,
-    validation_data = val_ds, 
-    validation_steps = len(val_ds), 
-    verbose = 1
+model = cnn.fit(
+    x = train_dataset, 
+    steps_per_epoch = len(train_dataset),
+    epochs = 90,
+    validation_data = val_dataset, 
+    validation_steps = len(val_df), 
+    verbose = 0
 )
 
-for k in history.keys():
-    history[k] += h3.history[k]
+history = model.history
 
 epoch_range = range(1, len(history['loss'])+1)
 
@@ -157,18 +139,14 @@ plt.legend()
 plt.tight_layout()
 plt.savefig('graphs.png')
 
-cnn.save('HCDv01.h5')
-pickle.dump(history, open(f'HCDv01.pkl', 'wb'))
-
 # Create test dataset
 test_filenames = [f for f in os.listdir(test_directory)]
-#test_filenames = test_filenames[:100]
 
 test_labels = np.zeros(len(test_filenames), dtype=np.int64)
 test_df = pd.DataFrame({'id': test_filenames, 'label': test_labels})
 print(test_df.head())
 
-test_ds = validation_datagen.flow_from_dataframe(
+test_dataset = validation_generator.flow_from_dataframe(
     dataframe=test_df,
     directory=test_directory,
     x_col='id',
@@ -180,13 +158,13 @@ test_ds = validation_datagen.flow_from_dataframe(
     target_size=(32, 32)
 )
 
-# Generate predictions for the test set
-
-predictions = cnn.predict(test_ds)
-# Binarize the predictions
+predictions = cnn.predict(test_dataset)
+# predictions are presented as a list of tuples with probabilities for each category
+# e.g. [0.5671,0.4329]
+# the actual category will be equal to the index of the maximum element in the tuplepredicted_labels = np.argmax(predictions, axis=1)
 predicted_labels = np.argmax(predictions, axis=1)
 # Create a DataFrame with the IDs and predicted labels
 submission = pd.DataFrame({'id': test_filenames, 'label': predicted_labels})
 
 # Save the DataFrame to a CSV file
-submission.to_csv('submission.csv', index=False)
+submission.to_csv('final_submission.csv', index=False)
