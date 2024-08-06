@@ -11,7 +11,6 @@ from sklearn.model_selection import train_test_split
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-import pickle
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
@@ -26,6 +25,7 @@ train_directory = './train'
 test_directory = './test'
 
 data = pd.read_csv('train_labels.csv', dtype=str)
+# data = data.head(100) # for testing
 
 data['id'] = data['id'] + '.tif'  # Add file extension
 
@@ -71,35 +71,36 @@ val_dataset = validation_generator.flow_from_dataframe(
 base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=input_shape)
 
 cnn = Sequential([
-    # 16 filters capture low level features (e.g. edges)
-    Conv2D(16, (3,3), activation = 'relu', padding = 'same', input_shape=(32,32,3)),
-    Conv2D(16, (3,3), activation = 'relu', padding = 'same'),
-    MaxPooling2D(2,2),
-    Dropout(0.5),
-    BatchNormalization(),
+    base_model,
 
-    # 64 filters capture more complex features (general shapes)
-    Conv2D(64, (3,3), activation = 'relu', padding = 'same'),
-    Conv2D(64, (3,3), activation = 'relu', padding = 'same'),
-    MaxPooling2D(2,2),
+    # 16 filters capture low level features (e.g. edges)
+    Conv2D(64, (3,3), activation='relu', padding='same'),
+    Conv2D(64, (3,3), activation='relu', padding='same'),
+    MaxPooling2D(2,2, padding='same'),
     Dropout(0.5),
     BatchNormalization(),
     
     # 128 filters capture high-level abstract features
-    Conv2D(128, (3,3), activation = 'relu', padding = 'same'),
-    Conv2D(128, (3,3), activation = 'relu', padding = 'same'),
-    MaxPooling2D(2,2),
+    Conv2D(128, (3,3), activation='relu', padding='same'),
+    Conv2D(128, (3,3), activation='relu', padding='same'),
+    MaxPooling2D(2,2, padding='same'),
     Dropout(0.5),
     BatchNormalization(),
 
+    GlobalAveragePooling2D(),
     Flatten(),
     
     # final fully connected layers
+    Dense(512, activation='relu'),
+    Dropout(0.5),
+    BatchNormalization(),
+
     Dense(16, activation='relu'),
     Dropout(0.5),
     Dense(8, activation='relu'),
     Dropout(0.5),
     BatchNormalization(),
+
     Dense(2, activation='softmax')
 ])
 
@@ -112,8 +113,8 @@ model = cnn.fit(
     steps_per_epoch = len(train_dataset),
     epochs = 90,
     validation_data = val_dataset, 
-    validation_steps = len(val_df), 
-    verbose = 0
+    validation_steps = len(val_dataset), 
+    verbose = 1
 )
 
 history = model.history
@@ -137,10 +138,11 @@ plt.plot(epoch_range, history['val_auc'], label='Validation')
 plt.xlabel('Epoch'); plt.ylabel('AUC'); plt.title('AUC')
 plt.legend()
 plt.tight_layout()
-plt.savefig('graphs.png')
+plt.savefig('second_graphs.png')
 
 # Create test dataset
 test_filenames = [f for f in os.listdir(test_directory)]
+# test_filenames = test_filenames[:50] # for testing
 
 test_labels = np.zeros(len(test_filenames), dtype=np.int64)
 test_df = pd.DataFrame({'id': test_filenames, 'label': test_labels})
@@ -167,4 +169,4 @@ predicted_labels = np.argmax(predictions, axis=1)
 submission = pd.DataFrame({'id': test_filenames, 'label': predicted_labels})
 
 # Save the DataFrame to a CSV file
-submission.to_csv('final_submission.csv', index=False)
+submission.to_csv('second_submission.csv', index=False)
